@@ -72,41 +72,8 @@ defmodule Paginator.Ecto.Query do
         {position, column} = column_position(query, bound_column)
 
         dynamic =
-          case get_operator_for_field(fields, bound_column, cursor_direction) do
-            :lt ->
-              if is_nil(value) do
-                dynamic([{q, position}], not is_nil(field(q, ^column)))
-              else
-                dynamic([{q, position}], field(q, ^column) < ^value)
-              end
-
-            :gt ->
-              if is_nil(value) do
-                dynamic([{q, position}], false)
-              else
-                dynamic(
-                  [{q, position}],
-                  is_nil(field(q, ^column)) or field(q, ^column) > ^value
-                )
-              end
-
-            :lt_null ->
-              if is_nil(value) do
-                dynamic([{q, position}], false)
-              else
-                dynamic(
-                  [{q, position}],
-                  is_nil(field(q, ^column)) or field(q, ^column) < ^value
-                )
-              end
-
-            :gt_null ->
-              if is_nil(value) do
-                dynamic([{q, position}], not is_nil(field(q, ^column)))
-              else
-                dynamic([{q, position}], field(q, ^column) > ^value)
-              end
-          end
+          get_operator_for_field(fields, bound_column, cursor_direction)
+          |> create_where_clause(position, column, value)
 
         dynamic =
           sorts
@@ -129,6 +96,38 @@ defmodule Paginator.Ecto.Query do
       end)
 
     where(query, [{q, 0}], ^dynamic_sorts)
+  end
+
+  defp create_where_clause(:lt, position, column, nil) do
+    dynamic([{q, position}], not is_nil(field(q, ^column)))
+  end
+
+  defp create_where_clause(:lt, position, column, value) do
+    dynamic([{q, position}], field(q, ^column) < ^value)
+  end
+
+  defp create_where_clause(:gt, _position, _column, nil) do
+    dynamic([{q, position}], false)
+  end
+
+  defp create_where_clause(:gt, position, column, value) do
+    dynamic([{q, position}], is_nil(field(q, ^column)) or field(q, ^column) > ^value)
+  end
+
+  defp create_where_clause(:lt_null, _position, _column, nil) do
+    dynamic([{q, position}], false)
+  end
+
+  defp create_where_clause(:lt_null, position, column, value) do
+    dynamic([{q, position}], is_nil(field(q, ^column)) or field(q, ^column) < ^value)
+  end
+
+  defp create_where_clause(:gt_null, position, column, nil) do
+    dynamic([{q, position}], not is_nil(field(q, ^column)))
+  end
+
+  defp create_where_clause(:gt_null, position, column, value) do
+    dynamic([{q, position}], field(q, ^column) > ^value)
   end
 
   defp maybe_where(query, %Config{
