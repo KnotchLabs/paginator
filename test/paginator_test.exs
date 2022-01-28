@@ -413,87 +413,86 @@ defmodule PaginatorTest do
              }
     end
 
-    # test "sorts descending nulls first without cursors", %{
-    #   payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14}
-    # } do
+    test "sorts descending nulls first without cursors", %{
+      payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:desc_nulls_first)
+        |> Repo.paginate(
+          cursor_fields: [:charged_at, :id],
+          sort_direction: :desc_nulls_first,
+          limit: 50
+        )
 
-    #   %Page{entries: entries, metadata: metadata} =
-    #     payments_by_charged_at(:desc_nulls_first)
-    #     |> Repo.paginate(
-    #       cursor_fields: [:charged_at, :id],
-    #       sort_direction: :desc_nulls_first,
-    #       limit: 50
-    #     )
+      assert to_ids(entries) ==
+               to_ids([p14, p5, p12, p10, p9, p13, p2, p11, p3, p8, p7, p1, p4, p6])
 
-    #   assert to_ids(entries) ==
-    #            to_ids([p14, p5, p12, p10, p9, p13, p2, p11, p3, p8, p7, p1, p4, p6])
+      assert metadata == %Metadata{after: nil, before: nil, limit: 50}
+    end
 
-    #   assert metadata == %Metadata{after: nil, before: nil, limit: 50}
-    # end
+    test "sorts descending nulls first with before cursor", %{
+      payments: {_p1, _p2, _p3, _p4, p5, _p6, _p7, _p8, _p9, p10, _p11, p12, _p13, p14}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:desc_nulls_first)
+        |> Repo.paginate(
+          cursor_fields: [:charged_at, :id],
+          sort_direction: :desc_nulls_first,
+          before: encode_cursor(%{charged_at: p10.charged_at, id: p10.id}),
+          limit: 8
+        )
 
-    # test "sorts descending nulls first with before cursor", %{
-    #   payments: {_p1, _p2, _p3, _p4, p5, _p6, _p7, _p8, _p9, p10, _p11, p12, _p13, p14}
-    # } do
-    #   %Page{entries: entries, metadata: metadata} =
-    #     payments_by_charged_at(:desc_nulls_first)
-    #     |> Repo.paginate(
-    #       cursor_fields: [:charged_at, :id],
-    #       sort_direction: :desc_nulls_first,
-    #       before: encode_cursor(%{charged_at: p10.charged_at, id: p10.id}),
-    #       limit: 8
-    #     )
+      assert to_ids(entries) == to_ids([p14, p5, p12])
 
-    #   assert to_ids(entries) == to_ids([p14, p5, p12])
+      assert metadata == %Metadata{
+               after: encode_cursor(%{charged_at: p12.charged_at, id: p12.id}),
+               before: nil,
+               limit: 8
+             }
+    end
 
-    #   assert metadata == %Metadata{
-    #            after: encode_cursor(%{charged_at: p12.charged_at, id: p12.id}),
-    #            before: nil,
-    #            limit: 8
-    #          }
-    # end
+    test "sorts descending nulls first with after cursor", %{
+      payments: {p1, p2, p3, _p4, _p5, _p6, p7, p8, p9, p10, p11, _p12, p13, _p14}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:desc_nulls_first)
+        |> Repo.paginate(
+          cursor_fields: [:charged_at, :id],
+          sort_direction: :desc_nulls_first,
+          after: encode_cursor(%{charged_at: p10.charged_at, id: p10.id}),
+          limit: 8
+        )
 
-    # test "sorts descending nulls first with after cursor", %{
-    #   payments: {p1, p2, p3, _p4, _p5, _p6, p7, p8, p9, p10, p11, _p12, p13, _p14}
-    # } do
-    #   %Page{entries: entries, metadata: metadata} =
-    #     payments_by_charged_at(:desc_nulls_first)
-    #     |> Repo.paginate(
-    #       cursor_fields: [:charged_at, :id],
-    #       sort_direction: :desc_nulls_first,
-    #       after: encode_cursor(%{charged_at: p10.charged_at, id: p10.id}),
-    #       limit: 8
-    #     )
+      assert to_ids(entries) == to_ids([p9, p13, p2, p11, p3, p8, p7, p1])
 
-    #   assert to_ids(entries) == to_ids([p9, p13, p2, p11, p3, p8, p7, p1])
+      assert metadata == %Metadata{
+               after: encode_cursor(%{charged_at: p1.charged_at, id: p1.id}),
+               before: encode_cursor(%{charged_at: p9.charged_at, id: p9.id}),
+               limit: 8
+             }
+    end
 
-    #   assert metadata == %Metadata{
-    #            after: encode_cursor(%{charged_at: p1.charged_at, id: p1.id}),
-    #            before: encode_cursor(%{charged_at: p9.charged_at, id: p9.id}),
-    #            limit: 8
-    #          }
-    # end
+    test "sorts descending nulls first with before and after cursor", %{
+      payments: {_p1, p2, p3, _p4, _p5, _p6, _p7, _p8, p9, p10, p11, _p12, p13, _p14}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:desc_nulls_first)
+        |> Repo.paginate(
+          cursor_fields: [:charged_at, :id],
+          sort_direction: :desc_nulls_first,
+          after: encode_cursor(%{charged_at: p10.charged_at, id: p10.id}),
+          before: encode_cursor(%{charged_at: p3.charged_at, id: p3.id}),
+          limit: 8
+        )
 
-    # test "sorts descending nulls first with before and after cursor", %{
-    #   payments: {_p1, p2, p3, _p4, _p5, _p6, _p7, _p8, p9, p10, p11, _p12, p13, _p14}
-    # } do
-    #   %Page{entries: entries, metadata: metadata} =
-    #     payments_by_charged_at(:desc_nulls_first)
-    #     |> Repo.paginate(
-    #       cursor_fields: [:charged_at, :id],
-    #       sort_direction: :desc_nulls_first,
-    #       after: encode_cursor(%{charged_at: p10.charged_at, id: p10.id}),
-    #       before: encode_cursor(%{charged_at: p3.charged_at, id: p3.id}),
-    #       limit: 8
-    #     )
+      assert to_ids(entries) == to_ids([p9, p13, p2, p11])
 
-    #   assert to_ids(entries) == to_ids([p9, p13, p2, p11])
-
-    #   assert metadata == %Metadata{
-    #            after: encode_cursor(%{charged_at: p11.charged_at, id: p11.id}),
-    #            before: encode_cursor(%{charged_at: p9.charged_at, id: p9.id}),
-    #            limit: 8
-    #          }
-    # end
+      assert metadata == %Metadata{
+               after: encode_cursor(%{charged_at: p11.charged_at, id: p11.id}),
+               before: encode_cursor(%{charged_at: p9.charged_at, id: p9.id}),
+               limit: 8
+             }
+    end
 
     test "sorts descending nulls last without cursors", %{
       payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14}
