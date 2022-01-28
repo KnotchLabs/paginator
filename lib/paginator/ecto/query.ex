@@ -81,11 +81,7 @@ defmodule Paginator.Ecto.Query do
           |> Enum.reduce(dynamic, fn {prev_column, prev_value}, dynamic ->
             {position, prev_column} = column_position(query, prev_column)
 
-            if is_nil(prev_value) do
-              dynamic([{q, position}], is_nil(field(q, ^prev_column)) and ^dynamic)
-            else
-              dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
-            end
+            create_multi_cursor_where_clause(position, prev_column, prev_value, dynamic)
           end)
 
         if i == 0 do
@@ -96,6 +92,14 @@ defmodule Paginator.Ecto.Query do
       end)
 
     where(query, [{q, 0}], ^dynamic_sorts)
+  end
+
+  defp create_multi_cursor_where_clause(position, prev_column, nil, dynamic) do
+    dynamic([{q, position}], is_nil(field(q, ^prev_column)) and ^dynamic)
+  end
+
+  defp create_multi_cursor_where_clause(position, prev_column, prev_value, dynamic) do
+    dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
   end
 
   defp create_where_clause(:lt, position, column, nil) do
