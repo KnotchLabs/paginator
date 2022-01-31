@@ -18,10 +18,23 @@ defmodule Paginator.Ecto.Query do
     paginate(queryable, config)
   end
 
-  defp get_operator(:asc, :before), do: :lt
-  defp get_operator(:desc, :before), do: :gt
   defp get_operator(:asc, :after), do: :gt
+  defp get_operator(:asc, :before), do: :lt
+
   defp get_operator(:desc, :after), do: :lt
+  defp get_operator(:desc, :before), do: :gt
+
+  defp get_operator(:desc_nulls_first, :after), do: :lt
+  defp get_operator(:desc_nulls_first, :before), do: :gt
+
+  defp get_operator(:desc_nulls_last, :after), do: :lt_null
+  defp get_operator(:desc_nulls_last, :before), do: :gt_null
+
+  defp get_operator(:asc_nulls_first, :after), do: :gt_null
+  defp get_operator(:asc_nulls_first, :before), do: :lt_null
+
+  defp get_operator(:asc_nulls_last, :after), do: :gt
+  defp get_operator(:asc_nulls_last, :before), do: :lt
 
   defp get_operator(direction, _),
     do: raise("Invalid sorting value :#{direction}, please use either :asc or :desc")
@@ -51,7 +64,6 @@ defmodule Paginator.Ecto.Query do
     sorts =
       fields
       |> Enum.map(fn {column, _order} -> {column, Map.get(values, column)} end)
-      |> Enum.reject(fn val -> match?({_column, nil}, val) end)
 
     dynamic_sorts =
       sorts
@@ -59,23 +71,17 @@ defmodule Paginator.Ecto.Query do
       |> Enum.reduce(true, fn {{bound_column, value}, i}, dynamic_sorts ->
         {position, column} = column_position(query, bound_column)
 
-        dynamic = true
-
         dynamic =
-          case get_operator_for_field(fields, bound_column, cursor_direction) do
-            :lt ->
-              dynamic([{q, position}], field(q, ^column) < ^value and ^dynamic)
-
-            :gt ->
-              dynamic([{q, position}], field(q, ^column) > ^value and ^dynamic)
-          end
+          get_operator_for_field(fields, bound_column, cursor_direction)
+          |> create_where_clause(position, column, value)
 
         dynamic =
           sorts
           |> Enum.take(i)
           |> Enum.reduce(dynamic, fn {prev_column, prev_value}, dynamic ->
             {position, prev_column} = column_position(query, prev_column)
-            dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
+
+            create_multi_cursor_where_clause(position, prev_column, prev_value, dynamic)
           end)
 
         if i == 0 do
@@ -86,6 +92,46 @@ defmodule Paginator.Ecto.Query do
       end)
 
     where(query, [{q, 0}], ^dynamic_sorts)
+  end
+
+  defp create_multi_cursor_where_clause(position, prev_column, nil, dynamic) do
+    dynamic([{q, position}], is_nil(field(q, ^prev_column)) and ^dynamic)
+  end
+
+  defp create_multi_cursor_where_clause(position, prev_column, prev_value, dynamic) do
+    dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
+  end
+
+  defp create_where_clause(:lt, position, column, nil) do
+    dynamic([{q, position}], not is_nil(field(q, ^column)))
+  end
+
+  defp create_where_clause(:lt, position, column, value) do
+    dynamic([{q, position}], field(q, ^column) < ^value)
+  end
+
+  defp create_where_clause(:gt, _position, _column, nil) do
+    dynamic([{q, position}], false)
+  end
+
+  defp create_where_clause(:gt, position, column, value) do
+    dynamic([{q, position}], is_nil(field(q, ^column)) or field(q, ^column) > ^value)
+  end
+
+  defp create_where_clause(:lt_null, _position, _column, nil) do
+    dynamic([{q, position}], false)
+  end
+
+  defp create_where_clause(:lt_null, position, column, value) do
+    dynamic([{q, position}], is_nil(field(q, ^column)) or field(q, ^column) < ^value)
+  end
+
+  defp create_where_clause(:gt_null, position, column, nil) do
+    dynamic([{q, position}], not is_nil(field(q, ^column)))
+  end
+
+  defp create_where_clause(:gt_null, position, column, value) do
+    dynamic([{q, position}], field(q, ^column) > ^value)
   end
 
   defp maybe_where(query, %Config{
@@ -160,7 +206,11 @@ defmodule Paginator.Ecto.Query do
             | expr:
                 Enum.map(expr, fn
                   {:desc, ast} -> {:asc, ast}
+                  {:desc_nulls_last, ast} -> {:asc_nulls_first, ast}
+                  {:desc_nulls_first, ast} -> {:asc_nulls_last, ast}
                   {:asc, ast} -> {:desc, ast}
+                  {:asc_nulls_last, ast} -> {:desc_nulls_first, ast}
+                  {:asc_nulls_first, ast} -> {:desc_nulls_last, ast}
                 end)
           }
         end
